@@ -1,0 +1,139 @@
+# .github/workflows/autograder.yml
+name: Auto‑Grader (Assignment 4)
+
+on:
+  pull_request:
+    branches: [ main ]
+    types:   [ opened, synchronize, reopened ]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  autograder:
+    if: ${{ github.actor != 'auto-commit-bot' && github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest          # host VM
+    container:                      # everything below runs INSIDE this image
+      image: rocker/verse:latest    # R + tidyverse + TeX + Python
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - name: Check out PR branch
+      uses: actions/checkout@v4
+      with:
+        ref:        ${{ github.event.pull_request.head.ref }}
+        repository: ${{ github.event.pull_request.head.repo.full_name }}
+        token:      ${{ secrets.GITHUB_TOKEN }}
+        path:       student-code
+
+    - name: Clean figs directory
+      run: |
+        mkdir -p student-code/figs
+        rm -rf   student-code/figs/*
+
+    # ────────────────────────────────────────────────────────────────────────────
+    # 2. R – cache the user library (~/.local/R/…)   (already contains tidyverse)
+    # ────────────────────────────────────────────────────────────────────────────
+    - name: Configure R_LIBS_USER
+      run: |
+        echo "R_LIBS_USER=$HOME/R/library" >> "$GITHUB_ENV"
+        mkdir -p "$HOME/R/library"
+
+    - name: Restore R package cache
+      uses: actions/cache@v4
+      id:   cache-r
+      with:
+        path: ${{ env.R_LIBS_USER }}
+        key:  ${{ runner.os }}-rocker-verse-R-4.3.2-v1
+
+    - name: Install missing R packages (janitor, etc.)
+      run: |
+
+    - name: Install R packages (janitor)
+      run: |
+        Rscript -e "pkgs <- c('janitor'); \
+          missing <- setdiff(pkgs, rownames(installed.packages())); \
+          if (length(missing)) install.packages(missing, repos='https://cloud.r-project.org')"
+
+    - name: Save R package cache
+      if: steps.cache-r.outputs.cache-hit != 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.R_LIBS_USER }}
+        key:  ${{ runner.os }}-rocker-verse-R-4.3.2-v1
+
+    # ────────────────────────────────────────────────────────────────────────────
+    # 3. Python – create & activate a venv, then install deps
+    # ────────────────────────────────────────────────────────────────────────────
+    - name: Setup Python environment
+      run: |
+        apt-get update && apt-get install -y python3-venv python3-pip
+        python3 -m venv "$HOME/.venv" 
+        echo "$HOME/.venv/bin" >> "$GITHUB_PATH"
+    
+    - name: Restore pip cache
+      uses: actions/cache@v4
+      id:   cache-pip
+      with:
+        path: ~/.cache/pip
+        key:  ${{ runner.os }}-pip-v1
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install python-dateutil pytz requests pandas
+
+    - name: Save pip cache
+      if: steps.cache-pip.outputs.cache-hit != 'true'
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key:  ${{ runner.os }}-pip-v1
+
+    # ────────────────────────────────────────────────────────────────────────────
+    # 4. Run the autograder script
+    # ────────────────────────────────────────────────────────────────────────────
+    - name: Run autograder
+      id: run_autograder
+      continue-on-error: true
+      env:
+        GITHUB_TOKEN:      ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_EVENT_PATH: ${{ github.event_path }}
+      run: |
+        set -o pipefail
+        python student-code/.github/workflows/autograder.py | tee grader_output.txt
+
+
+    - name: Commit generated figures
+      if: always()   # run even if autograder failed
+      run: |
+        cd student-code
+        git config user.name  "auto-commit-bot"
+        git config user.email "auto-commit-bot@example.com"
+        if [ -n "$(git status --porcelain figs/)" ]; then
+          git add figs/
+          git commit -m "Auto‑grader: update figs"
+          git push
+        else
+          echo "No changes to figs/"
+        fi
+
+    # ────────────────────────────────────────────────────────────────────────────
+    # 5. Surface results in PR summary
+    # ────────────────────────────────────────────────────────────────────────────
+    - name: Publish summary
+      run: |
+        echo "## Autograder Results" >> "$GITHUB_STEP_SUMMARY"
+        echo '```'                  >> "$GITHUB_STEP_SUMMARY"
+        cat  grader_output.txt      >> "$GITHUB_STEP_SUMMARY"
+        echo '```'                  >> "$GITHUB_STEP_SUMMARY"
+
+    # ────────────────────────────────────────────────────────────────────────────
+    # 6. Fail the check if autograder signalled errors
+    # ────────────────────────────────────────────────────────────────────────────
+    - name: Mark job as failed if needed
+      if: ${{ steps.run_autograder.outcome == 'failure' }}
+      run: exit 1
