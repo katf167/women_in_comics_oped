@@ -49,12 +49,9 @@ jobs:
         path: ${{ env.R_LIBS_USER }}
         key:  ${{ runner.os }}-rocker-verse-R-4.3.2-v1
 
-    - name: Install missing R packages (janitor, etc.)
+    - name: Install R packages (janitor, plotly)
       run: |
-
-    - name: Install R packages (janitor)
-      run: |
-        Rscript -e "pkgs <- c('janitor'); \
+        Rscript -e "pkgs <- c('janitor', 'plotly'); \
           missing <- setdiff(pkgs, rownames(installed.packages())); \
           if (length(missing)) install.packages(missing, repos='https://cloud.r-project.org')"
 
