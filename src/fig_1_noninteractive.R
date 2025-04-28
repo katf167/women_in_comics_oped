@@ -66,3 +66,4 @@ figure1 <- ggplot(alignment_by_gender, aes(x = percentage, y = ALIGN, fill = com
 
 ggsave("figs/fig1.png", figure1)
 
+figure1
