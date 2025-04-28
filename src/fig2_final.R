@@ -1,5 +1,6 @@
 library(dplyr)
 library(ggplot2)
+library(tidyverse)
 #load the data
 marvel <- read.csv('data/marvel_data.csv')
 dc <- read.csv('data/dc_data.csv')
