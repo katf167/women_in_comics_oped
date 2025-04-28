@@ -32,14 +32,14 @@ gender_ratio <- marvel_dc |>
   mutate(
     appearances = as.numeric(appearances),
     category = case_when(
-      appearances <= 10 ~ "1–10",
-      appearances <= 50 ~ "11–50",
-      appearances <= 100 ~ "51–100",
-      appearances <= 200 ~ "101–200",
+      appearances <= 10 ~ "1 to 10",
+      appearances <= 50 ~ "11 to 50",
+      appearances <= 100 ~ "51 to 100",
+      appearances <= 200 ~ "101 to 200",
       TRUE ~ "200+"
     ),
-    category = factor(category, levels = c("1–10","11–50","51–100", 
-                                           "101–200", "200+")))|>
+    category = factor(category, levels = c("1 to 10","11 to 50","51 to 100", 
+                                           "101 to 200", "200+")))|>
   count(category, alive, SEX) |>
   pivot_wider(names_from = SEX, values_from = n, values_fill = 0) |>
   mutate(ratio = `Female Characters` / `Male Characters`)
