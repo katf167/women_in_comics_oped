@@ -48,9 +48,9 @@ jobs:
         key:  ${{ runner.os }}-rocker-verse-R-4.3.2-v2
         save-always: true          # ← store the cache even on job failure
 
-    - name: Install R packages (styler, janitor)
+    - name: Install R packages (styler, janitor, plotly)
       run: |
-        Rscript -e "pkgs <- c('styler','janitor'); \
+        Rscript -e "pkgs <- c('styler','janitor','plotly'); \
           missing <- setdiff(pkgs, rownames(installed.packages())); \
           if (length(missing)) install.packages(missing, repos='https://cloud.r-project.org')"
 
