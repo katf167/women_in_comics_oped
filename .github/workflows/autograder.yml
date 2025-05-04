@@ -1,5 +1,4 @@
-# .github/workflows/autograder.yml
-name: Auto‑Grader (Assignment 4)
+name: Auto-Grader (Final Project)
 
 on:
   pull_request:
@@ -35,32 +34,25 @@ jobs:
         rm -rf   student-code/figs/*
 
     # ────────────────────────────────────────────────────────────────────────────
-    # 2. R – cache the user library (~/.local/R/…)   (already contains tidyverse)
+    # 2. R – cache the user library (~/.local/R/…)   (already contains tidyverse)
     # ────────────────────────────────────────────────────────────────────────────
     - name: Configure R_LIBS_USER
       run: |
         echo "R_LIBS_USER=$HOME/R/library" >> "$GITHUB_ENV"
         mkdir -p "$HOME/R/library"
 
-    - name: Restore R package cache
+    - name: Restore & save R package cache
       uses: actions/cache@v4
-      id:   cache-r
       with:
         path: ${{ env.R_LIBS_USER }}
-        key:  ${{ runner.os }}-rocker-verse-R-4.3.2-v1
+        key:  ${{ runner.os }}-rocker-verse-R-4.3.2-v2
+        save-always: true          # ← store the cache even on job failure
 
-    - name: Install R packages (janitor, plotly)
+    - name: Install R packages (styler, janitor)
       run: |
-        Rscript -e "pkgs <- c('janitor', 'plotly'); \
+        Rscript -e "pkgs <- c('styler','janitor'); \
           missing <- setdiff(pkgs, rownames(installed.packages())); \
           if (length(missing)) install.packages(missing, repos='https://cloud.r-project.org')"
-
-    - name: Save R package cache
-      if: steps.cache-r.outputs.cache-hit != 'true'
-      uses: actions/cache@v4
-      with:
-        path: ${{ env.R_LIBS_USER }}
-        key:  ${{ runner.os }}-rocker-verse-R-4.3.2-v1
 
     # ────────────────────────────────────────────────────────────────────────────
     # 3. Python – create & activate a venv, then install deps
@@ -71,24 +63,17 @@ jobs:
         python3 -m venv "$HOME/.venv" 
         echo "$HOME/.venv/bin" >> "$GITHUB_PATH"
     
-    - name: Restore pip cache
+    - name: Restore & save python pip cache
       uses: actions/cache@v4
-      id:   cache-pip
       with:
         path: ~/.cache/pip
         key:  ${{ runner.os }}-pip-v1
+        save-always: true          # ← store the cache even on job failure
 
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install python-dateutil pytz requests pandas
-
-    - name: Save pip cache
-      if: steps.cache-pip.outputs.cache-hit != 'true'
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key:  ${{ runner.os }}-pip-v1
+        python -m pip install python-dateutil pytz requests
 
     # ────────────────────────────────────────────────────────────────────────────
     # 4. Run the autograder script
