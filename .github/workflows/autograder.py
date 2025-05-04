@@ -1,39 +1,38 @@
 #!/usr/bin/env python3
 """
-Autograder for Assignment 4 (Data‑visualisation).
+Autograder for the Final-Project (Op-Ed with Data Visualisation).
 
 Scoring
 -------
-Problem 1  30 pts
-  • team commits             18
-  • PR requests review       12
-Problem 2  40 pts  (run.R executes cleanly)
-Problem 3  20 pts  (≥1 figure embedded in README)
-Problem 4  10 pts  (≥5 numbered bullets in README)
-----------------------------------------------
-Base total 100 pts
-Extra‑credit  early‑commit days (≤15 pts)
+Structure requirements            50 pts
+Functionality (run.R + figures)   20 pts
+Code readability – tidyverse       3 pts
+----------------------------------------
+Base total                        73 pts
+Extra credit
+  • Early & consistent commits   ≤15 pts
+  • End-of-course survey      (listed only)
 
-A non‑perfect, on‑time submission exits with code 1 so the PR check shows a ❌.
+A non-perfect, on-time submission exits
+with code 1 so the PR check shows ❌.
 """
 import os, sys, json, subprocess, shutil, re, datetime, requests, pytz
 from dateutil import parser
-import pandas as pd   # only needed for EC day count helper
+from pathlib import Path
 
-# ---------- global config ----------
-DUE_ET = datetime.datetime(2025, 4, 28, 18, 0, 0,
+# ───────────────────────── CONFIG ─────────────────────────
+DUE_ET = datetime.datetime(2025, 5, 9, 18, 0, 0,
                            tzinfo=pytz.timezone("US/Eastern"))
 EARLY_EC_PER_DAY = 5
 EARLY_EC_MAX = 15
 EXCLUDE_EC_AUTHORS = {
-    "chohlasa",                  # TA account
-    "github-actions[bot]",       # built‑in bot
-    "auto-commit-bot",           # the figs‑pushing bot
+    "chohlasa",
+    "github-actions[bot]",
+    "auto-commit-bot",
     "dependabot[bot]",
 }
 
-
-# ---------- helpers ----------
+# ───────────────────────── HELPERS ─────────────────────────
 def et(dt_str):
     return parser.isoparse(dt_str).astimezone(pytz.timezone("US/Eastern"))
 
@@ -45,138 +44,194 @@ def github_api(url, token):
 
 def pr_metadata():
     ev_path = os.environ["GITHUB_EVENT_PATH"]
-    with open(ev_path, "r", encoding="utf‑8") as f:
+    with open(ev_path, encoding="utf-8") as f:
         data = json.load(f)
-    repo = data["repository"]["full_name"]          # e.g. org/repo
+    repo = data["repository"]["full_name"]          # org/repo
     pr_num = data["number"]
     return repo, pr_num
 
-# ---------- grading ----------
-def grade_problem1(repo, pr_num, token):
-    """30 pts: commits + requested reviewer."""
-    commits = github_api(
-        f"https://api.github.com/repos/{repo}/pulls/{pr_num}/commits", token)
-    authors = {c["author"]["login"] for c in commits if c["author"]}
-    commit_pts = 18 if authors else 0
+# ───────────────────────── GRADING ─────────────────────────
+def grade_structure_requirements(readme):
+    """
+    50 pts if README.md:
+      • starts with a title ('# ')
+      • second non-empty line is italic author(s)
+      • ≥1 figure embed
+      • ends with 'Source data:' line
+      • body word-count ∈ [500,800]  (captions excluded)
+    Always prints the body word-count.
+    """
+    if not readme.exists():
+        print("Structure – README.md missing ⇒ 0/50")
+        return 0
+    lines = readme.read_text(encoding="utf-8").splitlines()
+    nonempty = [ln for ln in lines if ln.strip()]
 
-    pr_json = github_api(
-        f"https://api.github.com/repos/{repo}/pulls/{pr_num}", token)
-    reviewers = {u["login"] for u in pr_json.get("requested_reviewers", [])}
-    review_pts = 12 if "chohlasa" in reviewers else 0
+    # ── structural checks ──
+    if not nonempty or not nonempty[0].startswith("# "):
+        print("Structure – missing title line ⇒ 0/50"); return 0
+    if len(nonempty) < 2 or not (nonempty[1].startswith("*") and
+                                 nonempty[1].endswith("*")):
+        print("Structure – missing italic author line ⇒ 0/50"); return 0
+    if not any(re.search(r"!\[.*?\]\(figs/[^)]+\)", ln, flags=re.I)
+               for ln in lines):
+        print("Structure – no figure embed ⇒ 0/50"); return 0
+    if not any(re.match(r"\*?Source data:", ln, flags=re.I) for ln in lines):
+        print("Structure – no 'Source data:' line ⇒ 0/50"); return 0
 
-    print(f"P1 – authors found: {authors or 'none'}  => {commit_pts}/18")
-    print(f"P1 – reviewer ‘chohlasa’ requested? "
-          f"{'yes' if review_pts else 'no'}  => {review_pts}/12")
-    return commit_pts + review_pts
+    # ── body word-count (skip images & captions) ──
+    body_lines = []
+    in_body, prev_was_image = False, False
+    for ln in lines:
+        if not in_body:
+            # body starts *after* the italic author line
+            if ln.strip() and ln.startswith("*") and ln.endswith("*"):
+                in_body = True
+            continue
 
-def grade_problem2(repo_root):
-    """40 pts if `run.R` finishes with exit 0."""
-    figs = os.path.join(repo_root, "figs")
-    
-    # 1) Create figs/ if missing
-    os.makedirs(figs, exist_ok=True)
-    
-    # 2) Remove any contents (files/subfolders) inside figs
-    for item in os.listdir(figs):
-        path = os.path.join(figs, item)
-        if os.path.isfile(path) or os.path.islink(path):
-            os.remove(path)
-        elif os.path.isdir(path):
-            shutil.rmtree(path)
+        # stop at Source data
+        if re.match(r"\*?Source data:", ln, flags=re.I):
+            break
 
-    # 3) Run `Rscript run.R`
-    res = subprocess.run(["Rscript", "run.R"],
-                         cwd=repo_root,
-                         capture_output=False, 
-                         text=True)
+        stripped = ln.strip()
+        # skip image embed
+        if stripped.startswith("!"):
+            prev_was_image = True
+            continue
+        # skip caption line (first non-empty line after an image)
+        if prev_was_image:
+            if stripped:                       # treat this as caption
+                prev_was_image = False
+                continue
+            # if it's an empty line we keep the flag until we see text
+            continue
+        prev_was_image = False
+        body_lines.append(ln)
 
-    # 4) Check exit code for success/failure
+    words = re.findall(r"\b\w+\b", "\n".join(body_lines))
+    wc = len(words)
+    print(f"Structure – body word-count: {wc}")
+
+    if not (500 <= wc <= 800):
+        print("Structure – word-count outside 500–800 ⇒ 0/50")
+        return 0
+    print("Structure – all checks passed ⇒ 50/50")
+    return 50
+
+def grade_functionality(repo_root, readme):
+    """
+    20 pts if run.R executes (exit 0) and recreates every figure linked
+    from the README.
+    """
+    if not readme.exists():
+        print("Functionality – README.md missing ⇒ 0/20"); return 0
+    txt = readme.read_text(encoding="utf-8")
+    fig_links = re.findall(r"\((?:\./)?(figs/[^)]+)\)", txt, flags=re.I)
+    expected_figs = {os.path.normpath(p) for p in fig_links
+                     if p.lower().startswith("figs/")}
+    if not expected_figs:
+        print("Functionality – no figures found in README.md, not possible to test ⇒ 0/20"); return 0
+
+    figs_dir = repo_root / "figs"
+    shutil.rmtree(figs_dir, ignore_errors=True)
+    figs_dir.mkdir(exist_ok=True)
+
+    res = subprocess.run(["Rscript", "run.R"], cwd=repo_root)
+    if res.returncode != 0:
+        print("Functionality – run.R failed ⇒ 0/20"); return 0
+
+    created = {str(p.relative_to(repo_root)) for p in figs_dir.rglob("*")
+               if p.is_file()}
+    missing = expected_figs - created
+    if missing:
+        print(f"Functionality – missing {len(missing)} figure(s): "
+              f"{', '.join(sorted(missing))} ⇒ 0/20")
+        return 0
+    print(f"Functionality – all {len(expected_figs)} figure(s) reproduced ⇒ 20/20")
+    return 20
+
+def grade_style(repo_root):
+    """
+    3 pts if all .R files conform to the tidyverse style guide
+    (styler::style_dir(dry='fail')).
+    """
+    cmd = "styler::style_dir('.', dry='fail')"
+    res = subprocess.run(["Rscript", "-e", cmd], cwd=repo_root,
+                         capture_output=True)
     if res.returncode == 0:
-        print("P2 – run.R executed without error  => 40/40")
-        return 40
-    else:
-        print("P2 – run.R failed")
-        return 0
-
-def grade_problem3(readme_path):
-    """20 pts if ≥1 figure embed (![](figs/...))."""
-    if not os.path.exists(readme_path):
-        print("P3 – README.md missing  => 0/20")
-        return 0
-    txt = open(readme_path, encoding="utf‑8").read()
-    if re.search(r"!\[.*?\]\(figs\/[^)]+\)", txt, flags=re.I):
-        print("P3 – found at least one figure embed  => 20/20")
-        return 20
-    print("P3 – no figure embed detected  => 0/20")
-    return 0
-
-def grade_problem4(readme_path):
-    """10 pts if ≥5 numbered list items (lines starting ‘1.’, ‘2.’ …)."""
-    if not os.path.exists(readme_path):
-        print("P4 – README.md missing  => 0/10")
-        return 0
-    lines = open(readme_path, encoding="utf‑8").read().splitlines()
-    bullets = [ln for ln in lines if re.match(r"\d+\.\s", ln)]
-    if len(bullets) >= 5:
-        print(f"P4 – {len(bullets)} numbered bullets  => 10/10")
-        return 10
-    print(f"P4 – only {len(bullets)} bullets  => 0/10")
+        print("Style – tidyverse style pass ⇒ 3/3")
+        return 3
+    print("Style – `styler` found R files that did not conform to tidyverse style guide ⇒ 0/3")
     return 0
 
 def extra_credit_early_commits(commits):
-    """
-    5 pts per distinct day *by a human* before the due date (≤ 15 pts).
-    """
     days = {
         et(c["commit"]["committer"]["date"]).strftime("%Y-%m-%d")
         for c in commits
-        if c.get("author")                                 # skip anonymous
-        and c["author"]["login"] not in EXCLUDE_EC_AUTHORS # skip bots/TA
-        and et(c["commit"]["committer"]["date"]).date() < DUE_ET.date()
+        if c.get("author")
+        and c["author"]["login"] not in EXCLUDE_EC_AUTHORS
+        and et(c["commit"]["committer"]["date"]) < DUE_ET
     }
     pts = EARLY_EC_PER_DAY * min(len(days), EARLY_EC_MAX // EARLY_EC_PER_DAY)
-    print(f"Extra credit – early commit days: {sorted(days)} ⇒ +{pts}")
+    print(f"EC – early commits on {sorted(days)} ⇒ +{pts}")
     return pts
 
-# ---------- main ----------
+def survey_netids(repo_root):
+    f = repo_root / "src" / "survey.txt"
+    if not f.exists():
+        print("Survey – survey.txt not found")
+        return []
+    netids = [ln.strip() for ln in f.read_text(encoding="utf-8").splitlines()
+              if ln.strip()]
+    if netids:
+        print(f"Survey – NetIDs submitted: {', '.join(netids)}")
+    else:
+        print("Survey – survey.txt present but empty")
+    return netids
+
+# ───────────────────────── MAIN ─────────────────────────
 def main():
     token = os.environ.get("GITHUB_TOKEN", "")
-    repo_root = "student-code"
-    readme = os.path.join(repo_root, "README.md")
+    repo_root = Path("student-code")
+    readme = repo_root / "README.md"
 
     repo, pr_num = pr_metadata()
-    all_commits = github_api(
+    commits = github_api(
         f"https://api.github.com/repos/{repo}/pulls/{pr_num}/commits", token)
 
-    commit_times = [et(c["commit"]["committer"]["date"]) for c in all_commits]
-    last_commit_time = max(commit_times) if commit_times else None
-    late = last_commit_time and last_commit_time > DUE_ET
-    if last_commit_time:
+    commit_times = [et(c["commit"]["committer"]["date"]) for c in commits]
+    last_commit = max(commit_times) if commit_times else None
+    late = last_commit and last_commit > DUE_ET
+    if last_commit:
         print("Last commit:",
-              last_commit_time.strftime("%Y‑%m‑%d %H:%M %Z"),
-              "(late)" if late else "(on‑time)")
+              last_commit.strftime("%Y-%m-%d %H:%M %Z"),
+              "(late)" if late else "(on-time)")
 
-    # ---------- per‑problem grading ----------
-    p1 = grade_problem1(repo, pr_num, token)
-    p2 = grade_problem2(repo_root)
-    p3 = grade_problem3(readme)
-    p4 = grade_problem4(readme)
-    base = 0 if late else p1 + p2 + p3 + p4
+    # ── grading ──
+    structure = grade_structure_requirements(readme)
+    functionality  = grade_functionality(repo_root, readme)
+    style = grade_style(repo_root)
+    base  = 0 if late else (structure + functionality + style)     # 73 max
 
-    ec = 0 if late else extra_credit_early_commits(all_commits)
-    final = base + ec
+    ec_early  = extra_credit_early_commits(commits) if not late else 0
+    netids    = survey_netids(repo_root)              # listed only
 
+    # ── summary ──
     print("\n=== SCORE SUMMARY ===")
-    print(f"P1  {p1:>3}/30")
-    print(f"P2  {p2:>3}/40")
-    print(f"P3  {p3:>3}/20")
-    print(f"P4  {p4:>3}/10")
-    print(f"Base         {base:>3}/100")
-    print(f"Extra credit {ec:>3}  (max 15)")
-    print(f"Final score  {final}")
+    print(f"Structure              {structure:>3}/50")
+    print(f"Functionality          {functionality:>3}/20")
+    print(f"Style                  {style:>2}/3")
+    print(f"Total (autogradable):  {base:>3}/73")
+    print("\n")
+    print("\n=== EXTRA CREDIT ===")
+    print(f"Early commits   {ec_early:>3}")
+    if netids:
+        print(f"Survey EC – the following NetID(s) will receive +5 each:")
+        for n in netids:
+            print(f"  • {n}")
 
-    # red ❌ unless perfect (and on‑time)
-    if not late and base < 100:
+    # fail PR unless perfect (and on-time)
+    if not late and base < 73:
         sys.exit(1)
 
 if __name__ == "__main__":
