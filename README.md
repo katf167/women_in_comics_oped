@@ -1,5 +1,4 @@
 # Heroines and Villains: A Look into Gender and Morality in Comics
-
 *Kat Fan*
 
 In Alan Moore’s *Watchmen*, Silk Spectre Laurie takes on the role of a parody for her heroine peers: in her costumes designed to accommodate aesthetics over combat, she finds that her job as a superhero consists more of photoshoots and optics over crime-fighting. In the mainstream comics world, gender issues persist within and beyond the ways characters are portrayed on the page. A 2023 article reports that approximately 26.7% of all characters in Marvel and DC’s comic universes are women - a number that has not seen significant change over the decades of American mainstream comics since the 1930s.<sup>1</sup>
@@ -33,10 +32,10 @@ Interestingly, while male characters are much more likely to be deceased if they
 
 The data reveals that while there is visible gender imbalance in the number of characters, the relationship between gender, violence, harm, and death is not fully captured in the living and deceased character numbers.
 
-What we can observe is the distinct fate men and women characters face based on their moral alignment – though “goodness” is rewarded with higher chance of living in both genders, being “bad” or a villain often results in deaths for male characters, while evilness in female characters does not meet the same punishment. Silk Spectre’s experience with how her image and sexuality is consumed by the public and her relationship with morality, violence, and agency are metafictional reflections of the women characters in comics – a topic that should continue to be explored and discussed.
+What we can observe is the distinct fate men and women characters face based on their moral alignment - though "goodness" is rewarded with higher chance of living in both genders, being "bad" or a villain often results in deaths for male characters, while evilness in female characters does not meet the same punishment. Silk Spectre's experience with how her image and sexuality is consumed by the public and her relationship with morality, violence, and agency are metafictional reflections of the women characters in comics - a topic that should continue to be explored and discussed.
 
 ## Citations
-1. Joissim, J. (2023, March 30). *Women In Superhero Media: “Sheroes” Done Wrong*. The Boulevard Online. Retrieved from https://theboulevard252.org/6029/features/women-in-superhero-media-sheros-done-wrong/  
+1. Joissim, J. (2023, March 30). *Women In Superhero Media: “Sheroes” Done Wrong*. The Boulevard Online. Retrieved from https://theboulevard252.org/6029/features/women-in-superhero-media-sheros-done-wrong/
 2. Warsi, S. (2023). *Women in Comic Books*. Kaggle. Retrieved May 9, 2025, from https://www.kaggle.com/datasets/shamirwarsi/women-in-comic-books  
 3. *Women In Refrigerators*. LBY3. Retrieved May 9, 2025, from https://lby3.com/wir/index.html  
 
