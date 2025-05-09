@@ -1,7 +1,6 @@
 library(dplyr)
 library(ggplot2)
 library(CGPfunctions)
-library(ggthemes)
 
 marvel <- read.csv("data/marvel_data.csv")
 dc <- read.csv("data/dc_data.csv")
@@ -54,8 +53,7 @@ fig_3 <- newggslopegraph(
   SubTitle = NULL,
   Caption = NULL,
   LineThickness = 0.5,
-  YTextSize = 3,
-  ThemeChoice = "econ"
+  YTextSize = 3
 )
 
 ggsave("figs/fig3.png", fig_3)
