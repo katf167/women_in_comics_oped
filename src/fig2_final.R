@@ -65,7 +65,7 @@ labels_no_legend <- alignment_percentages |>
   ungroup()
 
 fig_2 <- ggplot(alignment_percentages, aes(x = ALIGN, y = percentages, group = gender)) +
-  geom_line(aes(color = gender, linetype = gender), size = 0.8) +
+  geom_line(aes(color = gender, linetype = gender), linewidth = 0.8) +
   geom_point(aes(color = gender), size = 3) +
   geom_segment(
     data = fm_diff,
