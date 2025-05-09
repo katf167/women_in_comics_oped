@@ -105,4 +105,3 @@ fig_2 <- ggplot(alignment_percentages, aes(x = ALIGN, y = percentages, group = g
   )
 
 ggsave("figs/fig2.png", fig_2)
-

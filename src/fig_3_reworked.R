@@ -59,4 +59,3 @@ fig_3 <- newggslopegraph(
 )
 
 ggsave("figs/fig3.png", fig_3)
-
