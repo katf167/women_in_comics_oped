@@ -50,6 +50,13 @@ last_cat <- levels(gender_ratio$category)[nlevels(gender_ratio$category)]
 label_data <- gender_ratio |>
   filter(category == last_cat)
 
+total_ratio <- marvel_dc |>
+  filter(SEX %in% c("Male Characters", "Female Characters")) |>
+  count(SEX) |>
+  pivot_wider(names_from = SEX, values_from = n) |>
+  summarise(r = `Female Characters` / `Male Characters`) |>
+  pull(r)
+
 fig_1 <- ggplot(gender_ratio, aes(x = category, y = ratio, group = alive, color = alive)) +
   geom_line(linewidth = 1) +
   geom_point(size = 3) +
