@@ -1,22 +1,17 @@
 library(dplyr)
 library(ggplot2)
-library(tidyverse)
-#load the data
-marvel <- read.csv('data/marvel_data.csv')
-dc <- read.csv('data/dc_data.csv')
+
+marvel <- read.csv("data/marvel_data.csv")
+dc <- read.csv("data/dc_data.csv")
 
 na_check <- function(x) !is.na(x) & trimws(x) != ""
 
-#drop nas for sex, align, and alive for now 
-#(might need to drop more rows later but not a lot of missing data)
 cleaned_m <- marvel |>
-  filter(if_all(c(SEX, ALIGN, ALIVE, APPEARANCES), na_check))
-
+  filter(if_all(c(SEX, ALIGN, ALIVE), na_check))
 
 cleaned_dc <- dc |>
-  filter(if_all(c(SEX, ALIGN, ALIVE, APPEARANCES), na_check))
+  filter(if_all(c(SEX, ALIGN, ALIVE), na_check))
 
-#combine the two datasets!
 marvel_dc <- bind_rows(
   cleaned_dc |>
     select(SEX, ALIGN, alive = ALIVE, year = YEAR, appearances = APPEARANCES) |>
@@ -26,60 +21,87 @@ marvel_dc <- bind_rows(
     mutate(company = "marvel")
 )
 
-#gender ratio (female/male) by number of appearances for deceased and alive characters
-#1000+ are main/popular/reoccurring characters
-gender_ratio <- marvel_dc |>
-  filter(SEX %in% c("Male Characters","Female Characters")) |>
+alignment_percentages <- bind_rows(
+  cleaned_dc |> mutate(universe = "DC"),
+  cleaned_m |> mutate(universe = "Marvel")
+) |>
+  filter(
+    SEX %in% c("Male Characters", "Female Characters"),
+    ALIGN %in% c("Good Characters", "Bad Characters", "Neutral Characters")
+  ) |>
   mutate(
-    appearances = as.numeric(appearances),
-    category = case_when(
-      appearances <= 10 ~ "1 to 10",
-      appearances <= 50 ~ "11 to 50",
-      appearances <= 100 ~ "51 to 100",
-      appearances <= 200 ~ "101 to 200",
-      TRUE ~ "200+"
-    ),
-    category = factor(category, levels = c("1 to 10","11 to 50","51 to 100", 
-                                           "101 to 200", "200+")))|>
-  count(category, alive, SEX) |>
-  pivot_wider(names_from = SEX, values_from = n, values_fill = 0) |>
-  mutate(ratio = `Female Characters` / `Male Characters`)
+    gender = if_else(SEX == "Female Characters", "Female", "Male"),
+    ALIGN  = factor(ALIGN, levels = c("Good Characters", "Neutral Characters", "Bad Characters"))
+  ) |>
+  count(universe, gender, ALIGN, name = "n") |>
+  group_by(universe, gender) |>
+  mutate(percentages = n / sum(n)) |>
+  ungroup() |>
+  mutate(x_position = as.numeric(ALIGN))
 
-#overall male/female ratio
-total_ratio <- marvel_dc |>
-  filter(SEX %in% c("Male Characters","Female Characters")) |>
-  count(SEX) |>
-  pivot_wider(names_from = SEX, values_from = n) |>
-  summarise(r = `Female Characters` / `Male Characters`) |>
-  pull(r)
-
-#fig2
-fig2 <- ggplot(gender_ratio, aes(x = category, y = ratio, fill = alive)) +
-  geom_col(position = position_dodge(width = 0.7), width = 0.4) + 
-  geom_hline(yintercept = total_ratio, linetype = "dashed", color = "black") +
-  annotate(
-    "text", x = Inf, y = total_ratio,
-    label = "Overall F/M Ratio", hjust = 1, vjust = -0.6,
-    family = "Optima", color = "black"
-  ) +
-  scale_fill_manual(
-    values = c("Deceased Characters" = "gray",
-               "Living Characters"   = "#a0dcff"),
-    name = "Status"
-  ) +
-  labs(
-    title = "Gender Ratio by Appearance & Living Status",
-    x     = "# of Appearances",
-    y     = "Female/Male Ratio"
-  ) +
-  theme_minimal(base_family = "Optima") +
-  theme(
-    panel.background = element_rect(fill = "white", color = NA), plot.background = element_rect(fill = "white", color = NA),
-    text = element_text(color = "black"), plot.title = element_text(hjust = 0.5, color = "black"),
-    axis.text = element_text(color = "black"), axis.title = element_text(color = "black"),
-    legend.title = element_text(color = "black"), legend.text = element_text(color = "black"),
-    panel.grid.major = element_line(color = "grey90"), panel.grid.minor = element_blank()
+fm_diff <- alignment_percentages |>
+  select(universe, ALIGN, gender, percentages, x_position) |>
+  pivot_wider(names_from = gender, values_from = percentages) |>
+  mutate(
+    diff = Female - Male,
+    ystart = Male,
+    yend = Female,
+    ymid = (Male + Female) / 2,
+    diff_label = paste0(abs(round(diff * 100, 1)), "%")
   )
 
-ggsave("figs/fig2.png", fig2)
-#fig2
+fm_diff <- fm_diff |>
+  mutate(
+    hjust = case_when(
+      ALIGN == "Good Characters" ~ 1.1,
+      ALIGN == "Neutral Characters" ~ -0.7,
+      ALIGN == "Bad Characters" ~ -0.1
+    )
+  )
+
+labels_no_legend <- alignment_percentages |>
+  group_by(universe, gender) |>
+  filter(x_position == max(x_position)) |>
+  ungroup()
+
+fig_2 <- ggplot(alignment_percentages, aes(x = ALIGN, y = percentages, group = gender)) +
+  geom_line(aes(color = gender, linetype = gender), linewidth = 0.8) +
+  geom_point(aes(color = gender), size = 3) +
+  geom_segment(
+    data = fm_diff,
+    aes(x = x_position, xend = x_position, y = ystart, yend = yend),
+    linetype = "dotted", color = "#a50000", inherit.aes = F
+  ) +
+  geom_text(
+    data = fm_diff,
+    aes(x = x_position, y = ymid, label = diff_label),
+    family = "Optima", color = "#a50000",
+    hjust = fm_diff$hjust, size = 3, inherit.aes = F
+  ) +
+  geom_text(
+    data = labels_no_legend,
+    aes(x = x_position + 0.1, y = percentages, label = gender, color = gender),
+    hjust = 0, family = "Optima", size = 3, inherit.aes = F
+  ) +
+  facet_wrap(~universe, ncol = 1) +
+  scale_y_continuous(labels = scales::percent_format(1), limits = c(0, NA)) +
+  scale_color_manual(
+    values = c(Female = "#a50000", Male = "#A9A9A9")
+  ) +
+  scale_linetype_manual(
+    values = c(Female = "solid", Male = "dashed")
+  ) +
+  labs(
+    title = "Percentages of Character Alignment by Gender",
+    x = "",
+    y = "Percent of Characters"
+  ) +
+  theme_gray(base_family = "Optima") +
+  theme(
+    legend.position       = "none",
+    plot.title            = element_text(hjust = 0.5),
+    panel.background      = element_rect(fill = "white", color = NA),
+    plot.background       = element_rect(fill = "white")
+  )
+
+ggsave("figs/fig2.png", fig_2)

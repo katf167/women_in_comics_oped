@@ -1,21 +1,18 @@
 library(dplyr)
 library(ggplot2)
+library(CGPfunctions)
 
-#load the data
-marvel <- read.csv('data/marvel_data.csv')
-dc <- read.csv('data/dc_data.csv')
+marvel <- read.csv("data/marvel_data.csv")
+dc <- read.csv("data/dc_data.csv")
 
 na_check <- function(x) !is.na(x) & trimws(x) != ""
 
-#drop nas for sex, align, and alive for now 
-#(might need to drop more rows later but not a lot of missing data)
 cleaned_m <- marvel |>
   filter(if_all(c(SEX, ALIGN, ALIVE), na_check))
 
 cleaned_dc <- dc |>
   filter(if_all(c(SEX, ALIGN, ALIVE), na_check))
 
-#combine the two datasets!
 marvel_dc <- bind_rows(
   cleaned_dc |>
     select(SEX, ALIGN, alive = ALIVE, year = YEAR, appearances = APPEARANCES) |>
@@ -25,53 +22,38 @@ marvel_dc <- bind_rows(
     mutate(company = "marvel")
 )
 
-fig3_cleaned <- marvel_dc |>
-  filter(SEX %in% c("Male Characters", "Female Characters"), !is.na(ALIGN)) |>
+slope_data <- marvel_dc |>
+  filter(
+    SEX %in% c("Male Characters", "Female Characters"),
+    ALIGN %in% c("Good Characters", "Neutral Characters", "Bad Characters")
+  ) |>
   mutate(
-    gender = if_else(SEX == "Female Characters", "Female", "Male"),
-    group = paste(gender, ALIGN, sep = " ")
-  )
-
-gender_alignment <- bind_rows(
-  fig3_cleaned|> 
-    count(group)|> 
-    mutate(status="Overall"),
-  fig3_cleaned|> 
-    filter(alive=="Deceased Characters")|> 
-    count(group)|> 
-    mutate(status="Deceased"),
-  fig3_cleaned|> 
-    filter(alive=="Living Characters")|> 
-    count(group)|> 
-    mutate(status="Living")
-)|>
-  group_by(status)|>
-  mutate(percentage = n/sum(n))|>
+    status = if_else(alive == "Living Characters", "Living", "Deceased"),
+    align_short = str_remove(ALIGN, " Characters"),
+    group_label = paste0(
+      tolower(align_short), " ",
+      if_else(SEX == "Female Characters", "female", "male"),
+      " characters"
+    )
+  ) |>
+  count(status, group_label, name = "n") |>
+  group_by(status) |>
+  mutate(prop = n / sum(n)) |>
+  mutate(prop = round(prop, 2)) |>
   ungroup()
 
-#comic book palette!! (specifically marvel's logo)
-custom_palette <- c(
-  "Female Good Characters"= "#e23636", "Male Good Characters"= "#000000",
-  "Female Neutral Characters"="#504a4a", "Male Neutral Characters"= "#518cca",
-  "Female Bad Characters"= "#f78f3f", "Male Bad Characters"= "#906aa3"
+# 3. Draw with newggslopegraph
+fig_3 <- newggslopegraph(
+  slope_data,
+  status,
+  prop,
+  group_label,
+  Title = "Alignment Distribution: Living vs Deceased by Gender",
+  TitleJustify = "C",
+  SubTitle = NULL,
+  Caption = NULL,
+  LineThickness = 0.5,
+  YTextSize = 3
 )
 
-# Three???panel pie chart
-fig3 <- ggplot(gender_alignment, aes(x = "", y = percentage, fill = group)) +
-  geom_col(width = 1) +
-  coord_polar(theta = "y") +
-  facet_wrap(~status, nrow = 1) +
-  scale_fill_manual(values = custom_palette, name = "") +
-  labs(title = "Character distribution by gender and moral alignment") +
-  theme_void(base_family = "Optima") +
-  theme(
-    plot.title = element_text(hjust = 0.5, color = "black"),
-    legend.title = element_text(color = "black"),
-    legend.text = element_text(color = "black"),
-    strip.text = element_text(color = "black"),
-    panel.background = element_rect(fill = "white", color = NA),
-    plot.background = element_rect(fill = "white", color = NA)
-  )
-
-ggsave("figs/fig3.png", fig3)
-fig3
+ggsave("figs/fig3.png", fig_3)
